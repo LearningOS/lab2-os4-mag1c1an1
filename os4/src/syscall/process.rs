@@ -1,7 +1,10 @@
 //! Process management syscalls
 
 use crate::config::MAX_SYSCALL_NUM;
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus};
+use crate::mm::{va2pa, VirtAddr};
+use crate::task::{
+    exit_current_and_run_next, get_task_info, suspend_current_and_run_next, TaskStatus,
+};
 use crate::timer::get_time_us;
 
 #[repr(C)]
@@ -17,6 +20,15 @@ pub struct TaskInfo {
     pub syscall_times: [u32; MAX_SYSCALL_NUM],
     pub time: usize,
 }
+impl TaskInfo {
+    pub fn init() -> TaskInfo {
+        Self {
+            status: TaskStatus::Ready,
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            time: 0,
+        }
+    }
+}
 
 pub fn sys_exit(exit_code: i32) -> ! {
     info!("[kernel] Application exited with code {}", exit_code);
@@ -31,15 +43,21 @@ pub fn sys_yield() -> isize {
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_get_time
-pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
-    let _us = get_time_us();
-    // unsafe {
-    //     *ts = TimeVal {
-    //         sec: us / 1_000_000,
-    //         usec: us % 1_000_000,
-    //     };
-    // }
-    0
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    let pa = va2pa((ts as usize).into());
+    if let Some(pa) = pa {
+        let us = get_time_us();
+        let ts = pa.0 as *mut TimeVal;
+        unsafe {
+            *ts = TimeVal {
+                sec: us / 1_000_000,
+                usec: us % 1_000_000,
+            };
+        }
+        0
+    } else {
+        -1
+    }
 }
 
 // CLUE: 从 ch4 开始不再对调度算法进行测试~
@@ -58,5 +76,13 @@ pub fn sys_munmap(_start: usize, _len: usize) -> isize {
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
-    -1
+    trace!("sys_task_info");
+    if let Some(pa) = va2pa((ti as usize).into()) {
+        let ti = pa.0 as *mut TaskInfo;
+        unsafe { *ti = get_task_info() }
+        0
+    } else {
+        error!("sys_task_info failed!");
+        -1
+    }
 }

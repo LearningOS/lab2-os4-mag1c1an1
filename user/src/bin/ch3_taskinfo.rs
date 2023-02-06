@@ -24,6 +24,7 @@ pub fn main() -> usize {
     assert!(0 < info.syscall_times[SYSCALL_YIELD]);
     assert_eq!(0, info.syscall_times[SYSCALL_EXIT]);
     assert!(t2 - t1 <= info.time + 1);
+    //println!("info.time: {} t3: {} t1: {}",info.time,t3,t1);
     assert!(info.time < t3 - t1 + 100);
     assert!(info.status == TaskStatus::Running);
 
