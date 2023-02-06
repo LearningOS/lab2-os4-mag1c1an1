@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VPNRange, VirtAddr, VirtPageNum};
 use crate::sync::UPSafeCell;
 use crate::syscall::TaskInfo;
 use crate::timer::get_time_us;
@@ -137,6 +138,9 @@ impl TaskManager {
             let mut inner = self.inner.exclusive_access();
             let current = inner.current_task;
             inner.tasks[next].info.status = TaskStatus::Running;
+            if inner.tasks[next].stime == 0 {
+                inner.tasks[next].stime = get_time_us();
+            }
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
@@ -167,6 +171,75 @@ impl TaskManager {
         let curr_task = &mut inner.tasks[curr_task_id];
         curr_task.info.time = (get_time_us() - curr_task.stime) / 1000;
         curr_task.info
+    }
+
+    fn mmap(&self, start: usize, len: usize, port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let curr_task_id = inner.current_task;
+        let curr_task = &mut inner.tasks[curr_task_id];
+        let ms = &mut curr_task.memory_set;
+
+        let sva = VirtAddr(start);
+        let eva = VirtAddr(start + len);
+        if !sva.aligned() {
+            error!("va is not aligned");
+            return -1;
+        }
+
+        if port & !0x7 != 0 {
+            error!("port error");
+            return -1;
+        }
+
+        if port & 0x7 == 0 {
+            error!("meaningless mmmp");
+            return -1;
+        }
+
+        let svpn = VirtPageNum::from(sva);
+        let evpn = VirtPageNum::from(eva.ceil());
+        let vpn_range = VPNRange::new(svpn, evpn);
+        for vpn in vpn_range {
+            if let Some(pte) = ms.translate(vpn) {
+                if pte.is_valid() {
+                    error!("vpn has been used");
+                    return -1;
+                }
+            }
+        }
+
+        let perm = MapPermission::from_bits((port as u8) << 1).unwrap() | MapPermission::U;
+        ms.insert_framed_area(VirtAddr(start), VirtAddr(start + len), perm);
+        0
+    }
+
+    fn munmap(&self, start: usize, len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let curr_task_id = inner.current_task;
+        let curr_task = &mut inner.tasks[curr_task_id];
+        let ms = &mut curr_task.memory_set;
+
+        let sva = VirtAddr(start);
+        let eva = VirtAddr(start + len);
+
+        if !sva.aligned() {
+            error!("{}:{} start is not aligned", file!(), line!());
+            return -1;
+        }
+
+        let svpn = VirtPageNum::from(sva);
+        let evpn = VirtPageNum::from(eva.ceil());
+        let vpn_range = VPNRange::new(svpn, evpn);
+        for vpn in vpn_range {
+            if let Some(pte) = ms.translate(vpn) {
+                if !pte.is_valid() {
+                    error!("{}:{} pte is not valid", file!(), line!());
+                    return -1;
+                }
+            }
+        }
+        ms.munmap(vpn_range);
+        0
     }
 }
 
@@ -221,4 +294,13 @@ pub fn update_task_info_syscall(syscall_id: usize) {
 pub fn get_task_info() -> TaskInfo {
     trace!("trap::get_task_info");
     TASK_MANAGER.get_task_info()
+}
+
+pub fn mmap(start: usize, len: usize, port: usize) -> isize {
+    trace!("trap::mmap");
+    TASK_MANAGER.mmap(start, len, port)
+}
+pub fn munmap(start: usize, len: usize) -> isize {
+    trace!("trap::munmap");
+    TASK_MANAGER.munmap(start, len)
 }

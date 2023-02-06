@@ -307,7 +307,14 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    pub fn munmap(&mut self,vpn_range:VPNRange){
+        for vpn in vpn_range {
+           self.page_table.unmap(vpn); 
+        }
+    }
 }
+
 
 lazy_static::lazy_static! {
     pub static ref KERNEL_SPACE:Arc<Mutex<MemorySet>> =

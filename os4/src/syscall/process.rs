@@ -1,9 +1,9 @@
 //! Process management syscalls
 
 use crate::config::MAX_SYSCALL_NUM;
-use crate::mm::{va2pa, VirtAddr};
+use crate::mm::va2pa;
 use crate::task::{
-    exit_current_and_run_next, get_task_info, suspend_current_and_run_next, TaskStatus,
+    exit_current_and_run_next, get_task_info, suspend_current_and_run_next, TaskStatus, mmap, munmap,
 };
 use crate::timer::get_time_us;
 
@@ -66,12 +66,12 @@ pub fn sys_set_priority(_prio: isize) -> isize {
 }
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    -1
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    mmap(start,len,port)
 }
 
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    munmap(start,len)
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info

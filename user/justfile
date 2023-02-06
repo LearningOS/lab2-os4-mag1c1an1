@@ -1,8 +1,8 @@
-build target:
+build target: clean
   @echo "Building {{target}}…"
   cargo build --release --bin {{target}}
   cp target/riscv64gc-unknown-none-elf/release/{{target}} build/elf/{{target}}.elf 
 
 clean:
   cargo clean
-  rm *.elf
+  -rm build/elf/*.elf
