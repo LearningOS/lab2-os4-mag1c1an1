@@ -7,7 +7,7 @@
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-
+#[macro_use]
 extern crate alloc;
 
 #[macro_use]
@@ -45,7 +45,7 @@ pub fn rust_main() -> ! {
     println!("[kernel] Hello, world!");
     mm::init();
     println!("[kernel] back to world!");
-    mm::remap_test();
+    // mm::remap_test();
     trap::init();
     //trap::enable_interrupt();
     trap::enable_timer_interrupt();
